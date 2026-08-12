@@ -52,7 +52,7 @@
 
 Dify Workflow 被触发后，上游节点（LLM Agent、HTTP Request、Code 节点等）负责产出结构化的 JSON 数据。这些数据是业务逻辑的产物——可能是 LLM 根据用户对话提取的合同参数，也可能是 HTTP 节点从 ERP 系统拉取的结算明细。数据产出后，Workflow 中的 Tool 节点被激活，该节点配置为调用 `generate_docx` 接口。
 
-Tool 节点将三个参数打包为 `multipart/form-data` 请求发送给 Skill 服务：`data` 是序列化后的 JSON 字符串，`title` 是期望的文件名，`template` 是 DOCX 模板文件的二进制内容。如果模板文件在 Dify 中以文件变量形式存在（例如用户上传或从知识库引用），则直接作为文件流传递。
+Tool 节点将三个参数打包为 `multipart/form-data` 请求发送给 Skill 服务：`data` 是序列化后的 JSON 字符串，`title` 是期望的文件名，`template` 是 DOCX 模板文件数组。由于 Dify 工作流中部分节点的文件变量未限定单文件类型，`template` 参数设计为接收文件数组——Skill 服务取数组中的第一个文件作为实际模板，其余文件忽略。这种设计避免了 Dify 传入多文件时触发 "This parameter only accepts one file but got multiple files" 错误。
 
 Skill 服务处理完毕后，返回包含 `file_url` 的 JSON 响应。Dify Tool 节点将这个响应解析为结构化变量，供下游节点使用。下游可以是 Answer 节点（将下载链接以消息形式发送给用户）、HTTP 节点（将文件推送到 OSS / 企业网盘）、或 Code 节点（提取文件 URL 后进行后续处理）。
 
@@ -69,7 +69,7 @@ Skill 服务内部的工作流程分为五个阶段，每个阶段都有明确�
 
 ### 3.1 请求接收与鉴权（API Layer）
 
-FastAPI 接收 HTTP 请求后，首先进行鉴权校验。如果配置了 API Key，会校验 `Authorization` Header 中的 Bearer Token。鉴权通过后，解析 multipart 请求体，提取 `data`、`title`、`template` 三个字段。此阶段还会进行基础的参数校验：`data` 是否为非空字符串、`title` 是否符合命名规范（长度限制、非法字符过滤）、`template` 的 Content-Type 是否为 DOCX 格式。
+FastAPI 接收 HTTP 请求后，首先进行鉴权校验。如果配置了 API Key，会校验 `Authorization` Header 中的 Bearer Token。鉴权通过后，解析 multipart 请求体，提取 `data`、`title`、`template` 三个字段。`template` 参数接受文件数组，服务端自动取 `template[0]` 作为实际模板文件，忽略数组中的其余文件。此阶段还会进行基础的参数校验：`data` 是否为非空字符串、`title` 是否符合命名规范（长度限制、非法字符过滤）、`template` 数组是否非空且第一个文件的 Content-Type 为 DOCX 格式。
 
 ### 3.2 数据解析与校验（Validation & Parsing）
 

@@ -112,10 +112,16 @@ paths:
                   example: 2026年8月结算单-示例科技
                   maxLength: 200
                 template:
-                  type: string
-                  format: binary
+                  type: array
+                  items:
+                    type: string
+                    format: binary
                   description: |
                     DOCX 模板文件（`.docx` 格式）。
+
+                    兼容 Dify 工作流中未限定单文件类型的场景，
+                    本参数接受文件数组。**Skill 服务仅使用数组中的第一个文件作为模板**，
+                    其余文件将被忽略。
 
                     模板中使用 `{{变量名}}` 标记占位符。
                     支持的模板语法详见 [模板变量规范](../examples/template_variables_spec.md)。
@@ -124,6 +130,11 @@ paths:
                     - 文件格式：Microsoft Word 2007+ (.docx)
                     - 文件大小：不超过 20 MB
                     - 模板中的占位符需与 JSON 数据中的字段名匹配
+
+                    **行为说明：**
+                    - 当 Dify 传入单个文件时，正常处理
+                    - 当 Dify 传入多个文件时，取 `template[0]` 作为模板
+                    - 当数组为空时，返回 `MISSING_FIELD` 错误
             encoding:
               template:
                 contentType: application/vnd.openxmlformats-officedocument.wordprocessingml.document
