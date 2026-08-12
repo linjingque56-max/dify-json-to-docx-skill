@@ -1,0 +1,6 @@
+# DOCX Generator Skill — Python 依赖
+fastapi>=0.110.0
+uvicorn[standard]>=0.29.0
+docxtpl>=0.16.0
+python-docx>=1.1.0
+pydantic>=2.6.0

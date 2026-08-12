@@ -28,6 +28,7 @@ Thumbs.db
 
 # Generated files
 files/
+generated_files/
 *.docx
 !examples/*.docx
 
