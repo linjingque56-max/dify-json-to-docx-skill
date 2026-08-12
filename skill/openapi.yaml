@@ -72,7 +72,7 @@ paths:
       requestBody:
         required: true
         content:
-          multipart/form-data:
+          application/json:
             schema:
               type: object
               required:
@@ -112,32 +112,54 @@ paths:
                   example: 2026年8月结算单-示例科技
                   maxLength: 200
                 template:
-                  type: array
-                  items:
-                    type: string
-                    format: binary
+                  type: string
                   description: |
-                    DOCX 模板文件（`.docx` 格式）。
+                    DOCX 模板文件内容，Base64 编码字符串。
 
-                    兼容 Dify 工作流中未限定单文件类型的场景，
-                    本参数接受文件数组。**Skill 服务仅使用数组中的第一个文件作为模板**，
-                    其余文件将被忽略。
+                    由于 Dify 自定义工具框架对文件类型参数（format: binary）
+                    有单文件校验限制，传入多文件会报错，且工作流中动态生成的
+                    文件没有现成可访问的 URL，因此本参数采用 Base64 编码方式
+                    传递模板文件内容，完全规避 Dify 的文件校验问题。
 
-                    模板中使用 `{{变量名}}` 标记占位符。
-                    支持的模板语法详见 [模板变量规范](../examples/template_variables_spec.md)。
+                    Skill 服务端收到 Base64 字符串后自动解码为 DOCX 文件进行渲染。
+
+                    **支持两种格式（自动识别）：**
+                    - Base64 字符串：纯 Base64 编码内容，如 `UEsDBBQAAAAIAA...`
+                    - Data URI：带 MIME 前缀，如 `data:application/vnd.openxmlformats-officedocument.wordprocessingml.document;base64,UEsDBBQAAAAIAA...`
+
+                    **Dify Workflow 中的使用方式：**
+
+                    在 Tool 节点前添加 Code 节点，将文件变量编码为 Base64 字符串：
+
+                    ```python
+                    import base64
+
+                    def main(files: list) -> dict:
+                        if not files:
+                            return {"template_b64": ""}
+                        # Dify 文件对象，取第一个文件
+                        f = files[0]
+                        # 方式1：如果文件对象包含 url 字段，先下载再编码
+                        url = f.get("url", "")
+                        if url:
+                            import urllib.request
+                            content = urllib.request.urlopen(url).read()
+                            return {"template_b64": base64.b64encode(content).decode("utf-8")}
+                        # 方式2：如果文件对象包含 content / blob 字段
+                        content = f.get("content", f.get("blob", b""))
+                        if isinstance(content, str):
+                            content = content.encode("utf-8")
+                        return {"template_b64": base64.b64encode(content).decode("utf-8")}
+                    ```
+
+                    然后在 Tool 节点中将 `template` 参数绑定到 Code 节点的
+                    `template_b64` 输出变量。
 
                     **要求：**
-                    - 文件格式：Microsoft Word 2007+ (.docx)
-                    - 文件大小：不超过 20 MB
+                    - Base64 解码后必须是合法的 .docx 文件
+                    - 原始文件大小不超过 15 MB（Base64 后约 20 MB）
                     - 模板中的占位符需与 JSON 数据中的字段名匹配
-
-                    **行为说明：**
-                    - 当 Dify 传入单个文件时，正常处理
-                    - 当 Dify 传入多个文件时，取 `template[0]` 作为模板
-                    - 当数组为空时，返回 `MISSING_FIELD` 错误
-            encoding:
-              template:
-                contentType: application/vnd.openxmlformats-officedocument.wordprocessingml.document
+                  example: UEsDBBQAAAAIAAAAL9l3Bw...
 
       responses:
         '200':

@@ -125,25 +125,61 @@ OpenAPI Schema 中的 `servers.url` 决定了 Dify 发送请求的目标地址�
 一个典型的「JSON → DOCX」Workflow 包含以下节点：
 
 ```
-[Start] → [LLM / HTTP Request] → [Tool: generate_docx] → [Answer] → [End]
+[Start] → [LLM/HTTP] → [Code: 数据处理+模板编码] → [Tool: generate_docx] → [Answer] → [End]
 ```
 
-**Start 节点** — 定义 Workflow 的输入参数。例如，用户输入客户名称和结算月份，或上传业务数据文件。
+**Start 节点** — 定义 Workflow 的输入参数。例如，用户输入客户名称和结算月份，或上传业务数据文件和模板文件。
 
 **LLM 节点（可选）** — 如果业务数据需要从非结构化文本中提取，使用 LLM 节点将自然语言转换为结构化 JSON。在 LLM 节点的提示词中指定输出 JSON 格式，确保字段名与 DOCX 模板中的变量名匹配。
 
 **HTTP Request 节点（可选）** — 如果业务数据存储在外部系统（ERP / CRM / 数据库 API），使用 HTTP Request 节点拉取数据。设置请求方法、URL、认证信息，并将响应体映射为 JSON 变量。
 
-**Code 节点（可选）** — 如果需要对数据进行转换（如金额格式化、日期处理、字段重命名），使用 Code 节点（Python / JavaScript）进行预处理。确保输出为符合模板变量规范的 JSON 对象。
+**Code 节点（关键）** — 这是绕开 Dify 文件校验的核心节点。承担两个职责：将业务数据序列化为 JSON 字符串，以及将模板文件变量编码为 Base64 字符串。
+
+Dify 的自定义工具框架对 `format: binary` 文件参数有单文件校验限制——当上游节点输出的是文件数组时，直接绑定到 Tool 节点的文件参数会触发 "This parameter only accepts one file but got multiple files" 错误。同时，工作流中动态生成的文件没有现成可访问的 URL。解决方案是在 Code 节点中将文件内容编码为 Base64 字符串，以纯文本形式传递给 Tool 节点。
+
+Code 节点示例（Python）：
+
+```python
+import json
+import base64
+
+def main(files: list, business_data: dict) -> dict:
+    # 1. 将模板文件编码为 Base64 字符串
+    template_b64 = ""
+    if files and len(files) > 0:
+        f = files[0]
+        # 方式1：文件对象包含 url 字段，先下载再编码
+        url = f.get("url", "")
+        if url:
+            import urllib.request
+            content = urllib.request.urlopen(url).read()
+            template_b64 = base64.b64encode(content).decode("utf-8")
+        else:
+            # 方式2：文件对象包含 content / blob 字段
+            content = f.get("content", f.get("blob", b""))
+            if isinstance(content, str):
+                content = content.encode("utf-8")
+            if content:
+                template_b64 = base64.b64encode(content).decode("utf-8")
+
+    # 2. 将业务数据序列化为 JSON 字符串
+    data_string = json.dumps(business_data, ensure_ascii=False)
+
+    return {
+        "template_b64": template_b64,
+        "data_string": data_string
+    }
+```
 
 **Tool 节点（核心）** — 这是调用 Skill 的节点。配置方式如下：
 
 1. 在画布中拖入 **工具** 节点。
 2. 在工具选择器中找到 `DOCX 文档生成` → `generate_docx`。
-3. 配置参数映射：
-   - `data`：绑定上游节点的 JSON 输出。点击参数输入框，选择变量引用，选择 LLM / HTTP / Code 节点的输出变量。注意：需要将 JSON 对象序列化为字符串。如果上游输出的是对象，使用 Code 节点执行 `JSON.stringify()` 或在 Dify 变量表达式中使用 `{{#node.output.jsonString}}` 格式。
+3. 配置参数映射（三个参数均为字符串类型，不涉及文件上传）：
+   - `data`：绑定 Code 节点的 `data_string` 输出变量（已序列化的 JSON 字符串）。
    - `title`：可以引用上游变量（如 `{{#start.customer_name}}_结算单`），也可以直接输入固定文本。
-   - `template`：上传 DOCX 模板文件，或引用 Workflow 中的文件变量。如果模板固定不变，直接在 Tool 节点中上传模板文件。
+   - `template`：绑定 Code 节点的 `template_b64` 输出变量（Base64 编码的模板文件内容）。
 
 **Answer 节点** — 将 Tool 节点的输出格式化为用户可读的消息。例如：
 
@@ -162,13 +198,18 @@ OpenAPI Schema 中的 `servers.url` 决定了 Dify 发送请求的目标地址�
 
 ### 3.3 调试 Workflow
 
-在 Dify 画布编辑器中点击 **运行**，输入测试数据，逐步检查每个节点的输出。重点关注 Tool 节点的输入参数是否正确——尤其是 `data` 参数，确保传入的是合法的 JSON 字符串而非对象。
+在 Dify 画布编辑器中点击 **运行**，输入测试数据，逐步检查每个节点的输出。重点关注：
+
+- Code 节点的 `template_b64` 输出是否为非空字符串（Base64 编码内容）
+- Code 节点的 `data_string` 输出是否为合法的 JSON 字符串
+- Tool 节点的三个参数是否都正确绑定到 Code 节点的输出变量
 
 常见调试问题：
 
-- `data` 参数传入了对象而非字符串 → 在 Code 节点中执行 `JSON.stringify()` 转换
+- `template_b64` 为空 → 检查 Code 节点是否能正确访问文件变量的 url 或 content 字段
+- `INVALID_TEMPLATE` 错误 → Base64 解码后不是合法的 .docx 文件，检查编码过程是否正确
+- `data` 参数传入了对象而非字符串 → 确保 Code 节点执行了 `json.dumps()` 序列化
 - 模板变量未匹配 → 检查 JSON 字段名与模板占位符是否完全一致（大小写敏感）
-- 文件下载失败 → 检查 Skill 服务的文件存储是否可被 Dify 访问（网络隔离问题）
 
 ---
 
