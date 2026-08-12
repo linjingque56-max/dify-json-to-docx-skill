@@ -5,68 +5,65 @@ info:
   description: |
     ## 概述
 
-    适用于 Dify 的 DOCX 文档生成 Skill。接收 JSON 数据和 DOCX 模板文件，
+    适用于 Dify 的 DOCX 文档生成 Skill。接收 JSON 数据和 DOCX 模板（Base64 编码），
     自动完成变量替换、表格循环填充、条件渲染，输出可下载的 Word 文件。
 
     ## 核心能力
 
     - **变量替换**：将 JSON 中的字段值注入模板占位符 `{{variable}}`
-    - **表格循环**：根据 JSON 数组自动展开模板表格行 `{{#items}}...{{/items}}`
+    - **表格循环**：根据 JSON 数组自动展开模板表格行
     - **条件渲染**：根据布尔值控制段落 / 行的显示与隐藏
     - **图片注入**：支持将 Base64 编码图片插入模板指定位置
     - **多格式输出**：生成标准 `.docx` 文件，兼容 Microsoft Word / WPS / Google Docs
-
-    ## 使用场景
-
-    适用于企业自动化流程中所有「结构化数据 → 正式文档」的环节，
-    包括但不限于结算单、合同、报价单、质检报告、对账单的自动生成。
-  version: 1.0.0
+  version: 1.1.0
   contact:
     name: DOCX Generator Skill
     url: https://github.com/linjingque56-max/dify-json-to-docx-skill
-    email: contact@example.com
-  license:
-    name: MIT
-    url: https://opensource.org/licenses/MIT
 
 servers:
-  - url: http://localhost:8080/v1
-    description: 本地开发环境
-
-tags:
-  - name: Document Generation
-    description: 文档生成相关接口
+  - url: http://127.0.0.1:8080
+    description: 本地开发环境（Dify 与 Skill 服务在同一台机器上时使用）
 
 paths:
-  /generate_docx:
+  /v1/generate_docx:
     post:
       operationId: generate_docx
       summary: 生成 DOCX 文档
       description: |
-        接收 JSON 数据、文件名和 DOCX 模板文件，渲染模板后返回生成的 Word 文件。
+        接收 JSON 数据、文件名和 DOCX 模板（Base64 编码），渲染模板后返回生成的 Word 文件下载链接。
 
-        ### 调用流程
+        ### 参数说明
 
-        1. Dify Workflow 中的上游节点（LLM / HTTP / Code 节点）产出结构化 JSON 数据。
-        2. 将 JSON 数据作为 `data` 参数传入本接口。
-        3. 上传 DOCX 模板文件作为 `template` 参数。
-        4. 指定生成文件名称 `title`。
-        5. 接口渲染模板，返回 DOCX 文件下载链接。
+        | 参数 | 类型 | 必填 | 说明 |
+        |------|------|------|------|
+        | data | string | 是 | JSON 格式的结构化数据字符串 |
+        | title | string | 是 | 生成文件名称（不含 .docx） |
+        | template | string | 是 | DOCX 模板文件内容，Base64 编码 |
 
-        ### 模板语法
+        ### template 参数说明
 
-        - 变量替换：`{{field_name}}` — 替换为 JSON 中对应字段的值
-        - 表格循环：`{{#array_name}}` ... `{{/array_name}}` — 数组每项生成一行
-        - 条件渲染：`{{#if condition}}` ... `{{/if}}` — 条件为真时显示
-        - 图片插入：`{{%image_field}}` — 插入 Base64 编码图片
+        由于 Dify 自定义工具对文件参数有单文件校验限制，
+        本参数采用 Base64 编码字符串传递模板，完全规避文件校验问题。
 
-        详见 [模板变量规范](../examples/template_variables_spec.md)。
+        在 Tool 节点前添加 Code 节点，将文件变量编码为 Base64：
 
-        ### 请求大小限制
+        ```python
+        import base64
 
-        - JSON 数据（`data`）：最大 5 MB
-        - DOCX 模板（`template`）：最大 20 MB
-        - 单次请求总大小：最大 25 MB
+        def main(files: list) -> dict:
+            if not files:
+                return {"template_b64": ""}
+            f = files[0]
+            url = f.get("url", "")
+            if url:
+                import urllib.request
+                content = urllib.request.urlopen(url).read()
+                return {"template_b64": base64.b64encode(content).decode("utf-8")}
+            content = f.get("content", f.get("blob", b""))
+            if isinstance(content, str):
+                content = content.encode("utf-8")
+            return {"template_b64": base64.b64encode(content).decode("utf-8")}
+        ```
       tags:
         - Document Generation
       requestBody:
@@ -82,174 +79,117 @@ paths:
               properties:
                 data:
                   type: string
-                  description: |
-                    JSON 格式的结构化数据，用于填充 DOCX 模板中的变量。
-
-                    支持嵌套对象和数组。数组用于表格行的循环填充。
-
-                    **示例：**
-                    ```json
-                    {
-                      "company": "示例科技有限公司",
-                      "date": "2026-08-12",
-                      "items": [
-                        {"name": "服务费", "amount": "50000.00"},
-                        {"name": "咨询费", "amount": "30000.00"}
-                      ],
-                      "total": "80000.00"
-                    }
-                    ```
-                  example: '{"company":"示例科技有限公司","date":"2026-08-12","items":[{"name":"服务费","amount":"50000.00"},{"name":"咨询费","amount":"30000.00"}],"total":"80000.00"}'
+                  description: JSON 格式的结构化数据字符串
+                  example: '{"company":"示例科技有限公司","date":"2026-08-12","total":"80000.00"}'
                 title:
                   type: string
-                  description: |
-                    生成文件的名称（不含 `.docx` 扩展名）。
-
-                    将作为返回文件名的一部分。建议使用有意义的命名，
-                    包含日期、类型、标识等信息。
-
-                    **示例：** `2026年8月结算单-示例科技`
+                  description: 生成文件名称（不含 .docx 扩展名）
                   example: 2026年8月结算单-示例科技
-                  maxLength: 200
                 template:
                   type: string
-                  description: |
-                    DOCX 模板文件内容，Base64 编码字符串。
-
-                    由于 Dify 自定义工具框架对文件类型参数（format: binary）
-                    有单文件校验限制，传入多文件会报错，且工作流中动态生成的
-                    文件没有现成可访问的 URL，因此本参数采用 Base64 编码方式
-                    传递模板文件内容，完全规避 Dify 的文件校验问题。
-
-                    Skill 服务端收到 Base64 字符串后自动解码为 DOCX 文件进行渲染。
-
-                    **支持两种格式（自动识别）：**
-                    - Base64 字符串：纯 Base64 编码内容，如 `UEsDBBQAAAAIAA...`
-                    - Data URI：带 MIME 前缀，如 `data:application/vnd.openxmlformats-officedocument.wordprocessingml.document;base64,UEsDBBQAAAAIAA...`
-
-                    **Dify Workflow 中的使用方式：**
-
-                    在 Tool 节点前添加 Code 节点，将文件变量编码为 Base64 字符串：
-
-                    ```python
-                    import base64
-
-                    def main(files: list) -> dict:
-                        if not files:
-                            return {"template_b64": ""}
-                        # Dify 文件对象，取第一个文件
-                        f = files[0]
-                        # 方式1：如果文件对象包含 url 字段，先下载再编码
-                        url = f.get("url", "")
-                        if url:
-                            import urllib.request
-                            content = urllib.request.urlopen(url).read()
-                            return {"template_b64": base64.b64encode(content).decode("utf-8")}
-                        # 方式2：如果文件对象包含 content / blob 字段
-                        content = f.get("content", f.get("blob", b""))
-                        if isinstance(content, str):
-                            content = content.encode("utf-8")
-                        return {"template_b64": base64.b64encode(content).decode("utf-8")}
-                    ```
-
-                    然后在 Tool 节点中将 `template` 参数绑定到 Code 节点的
-                    `template_b64` 输出变量。
-
-                    **要求：**
-                    - Base64 解码后必须是合法的 .docx 文件
-                    - 原始文件大小不超过 15 MB（Base64 后约 20 MB）
-                    - 模板中的占位符需与 JSON 数据中的字段名匹配
-                  example: UEsDBBQAAAAIAAAAL9l3Bw...
-
+                  description: DOCX 模板文件内容，Base64 编码字符串
+                  example: UEsDBBQAAAAIAA...
       responses:
         '200':
           description: 文档生成成功
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/DocxGenerationResponse'
-              example:
-                success: true
-                file_url: https://your-skill-host/files/20260812_153000_abc123.docx
-                file_name: 2026年8月结算单-示例科技.docx
-                file_size: 458752
-                generated_at: "2026-08-12T15:30:00+08:00"
-                rendering_summary:
-                  variables_replaced: 15
-                  table_rows_generated: 3
-                  conditions_evaluated: 2
-                  images_inserted: 0
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  file_url:
+                    type: string
+                    description: 生成的 DOCX 文件下载地址
+                    example: http://127.0.0.1:8080/files/20260812_153000_abc123.docx
+                  file_name:
+                    type: string
+                    example: 2026年8月结算单-示例科技.docx
+                  file_size:
+                    type: integer
+                    example: 458752
+                  generated_at:
+                    type: string
+                    example: "2026-08-12T15:30:00+08:00"
+                  rendering_summary:
+                    type: object
+                    properties:
+                      variables_replaced:
+                        type: integer
+                        example: 15
+                      table_rows_generated:
+                        type: integer
+                        example: 3
 
         '400':
           description: 请求参数错误
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
-              example:
-                success: false
-                error:
-                  code: INVALID_JSON
-                  message: "data 参数不是合法的 JSON 格式"
-                  details: "Expecting property name enclosed in double quotes: line 1 column 2"
-
-        '413':
-          description: 请求体过大
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-              example:
-                success: false
-                error:
-                  code: FILE_TOO_LARGE
-                  message: "模板文件超过 20 MB 限制"
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                        example: INVALID_JSON
+                      message:
+                        type: string
+                        example: data 参数不是合法的 JSON 格式
 
         '422':
           description: 模板渲染失败
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
-              example:
-                success: false
-                error:
-                  code: TEMPLATE_RENDER_ERROR
-                  message: "模板中的变量 {{total_amount}} 在 JSON 数据中未找到对应字段"
-                  details: "未匹配的变量列表: {{total_amount}}, {{signer_name}}"
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                        example: TEMPLATE_RENDER_ERROR
+                      message:
+                        type: string
+                        example: 模板渲染失败
 
         '500':
           description: 服务器内部错误
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
-              example:
-                success: false
-                error:
-                  code: INTERNAL_ERROR
-                  message: "文档生成过程中发生内部错误"
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                        example: INTERNAL_ERROR
+                      message:
+                        type: string
+                        example: 文档生成过程中发生内部错误
 
-        '503':
-          description: 服务不可用
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-              example:
-                success: false
-                error:
-                  code: SERVICE_UNAVAILABLE
-                  message: "服务暂时不可用，请稍后重试"
-
-  /health:
+  /v1/health:
     get:
       operationId: health_check
       summary: 健康检查
-      description: 检查 Skill 服务是否正常运行，可用于负载均衡和监控探针。
+      description: 检查 Skill 服务是否正常运行
       tags:
         - Document Generation
-      security: []
       responses:
         '200':
           description: 服务正常
@@ -263,115 +203,7 @@ paths:
                     example: ok
                   version:
                     type: string
-                    example: 1.0.0
+                    example: 1.1.0
                   timestamp:
                     type: string
-                    format: date-time
                     example: "2026-08-12T15:30:00+08:00"
-
-components:
-  securitySchemes:
-    ApiKeyAuth:
-      type: apiKey
-      in: header
-      name: Authorization
-      description: |
-        API Key 鉴权。在 Dify 工具配置中设置 Authorization Header，
-        值为 `Bearer <your-api-key>`。
-
-        如果 Skill 服务未启用鉴权，可忽略此字段。
-
-  schemas:
-    DocxGenerationResponse:
-      type: object
-      required:
-        - success
-        - file_url
-        - file_name
-      properties:
-        success:
-          type: boolean
-          description: 是否生成成功
-          example: true
-        file_url:
-          type: string
-          description: |
-            生成的 DOCX 文件下载地址。
-
-            该链接为临时链接，默认有效期 24 小时（可由服务端配置调整）。
-            Dify 可在有效期内多次下载。建议在 Workflow 中收到链接后
-            立即转发或存储到永久存储。
-          example: https://your-skill-host/files/20260812_153000_abc123.docx
-        file_name:
-          type: string
-          description: 完整文件名（含 .docx 扩展名）
-          example: 2026年8月结算单-示例科技.docx
-        file_size:
-          type: integer
-          description: 文件大小（字节）
-          example: 458752
-        generated_at:
-          type: string
-          format: date-time
-          description: 文档生成时间（ISO 8601 格式）
-          example: "2026-08-12T15:30:00+08:00"
-        rendering_summary:
-          type: object
-          description: 渲染统计信息（用于调试和日志）
-          properties:
-            variables_replaced:
-              type: integer
-              description: 成功替换的变量数量
-              example: 15
-            table_rows_generated:
-              type: integer
-              description: 表格循环生成的行数
-              example: 3
-            conditions_evaluated:
-              type: integer
-              description: 条件渲染评估的次数
-              example: 2
-            images_inserted:
-              type: integer
-              description: 插入的图片数量
-              example: 0
-
-    ErrorResponse:
-      type: object
-      required:
-        - success
-        - error
-      properties:
-        success:
-          type: boolean
-          description: 固定为 false
-          example: false
-        error:
-          type: object
-          required:
-            - code
-            - message
-          properties:
-            code:
-              type: string
-              description: |
-                错误码：
-                - `INVALID_JSON` — data 参数不是合法 JSON
-                - `INVALID_TEMPLATE` — 模板文件格式不正确
-                - `MISSING_FIELD` — 必填参数缺失
-                - `FILE_TOO_LARGE` — 文件超过大小限制
-                - `TEMPLATE_RENDER_ERROR` — 模板渲染失败（变量未匹配等）
-                - `INTERNAL_ERROR` — 服务器内部错误
-                - `SERVICE_UNAVAILABLE` — 服务暂不可用
-              example: TEMPLATE_RENDER_ERROR
-            message:
-              type: string
-              description: 人类可读的错误描述
-              example: 模板中的变量在 JSON 数据中未找到对应字段
-            details:
-              type: string
-              description: 附加错误详情（用于调试）
-              example: "未匹配的变量列表: {{total_amount}}, {{signer_name}}"
-
-security:
-  - ApiKeyAuth: []
