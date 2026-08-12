@@ -23,15 +23,13 @@ info:
   version: 1.0.0
   contact:
     name: DOCX Generator Skill
-    url: https://github.com/your-org/dify-json-to-docx-skill
+    url: https://github.com/linjingque56-max/dify-json-to-docx-skill
     email: contact@example.com
   license:
     name: MIT
     url: https://opensource.org/licenses/MIT
 
 servers:
-  - url: https://your-skill-host/v1
-    description: 生产环境（替换为实际部署地址）
   - url: http://localhost:8080/v1
     description: 本地开发环境
 
