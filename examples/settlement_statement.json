@@ -1,0 +1,88 @@
+{
+  "document_info": {
+    "type": "结算单",
+    "number": "JS-2026-08-001",
+    "date": "2026-08-12"
+  },
+  "settlement": {
+    "customer_name": "示例科技有限公司",
+    "customer_address": "上海市浦东新区张江高科技园区博云路2号",
+    "customer_phone": "021-58888888",
+    "supplier_name": "云端智能服务有限公司",
+    "supplier_address": "北京市海淀区中关村软件园2号楼",
+    "supplier_phone": "010-66666666",
+    "period_start": "2026-07-01",
+    "period_end": "2026-07-31",
+    "contract_number": "HT-2026-0042"
+  },
+  "items": [
+    {
+      "index": 1,
+      "name": "云服务器租赁费",
+      "spec": "8核16G / 500G SSD",
+      "unit": "月",
+      "quantity": 1,
+      "unit_price": "3200.00",
+      "amount": "3200.00"
+    },
+    {
+      "index": 2,
+      "name": "对象存储服务费",
+      "spec": "标准存储 / 1TB",
+      "unit": "月",
+      "quantity": 1,
+      "unit_price": "850.00",
+      "amount": "850.00"
+    },
+    {
+      "index": 3,
+      "name": "CDN流量费",
+      "spec": "按量计费 / 500GB",
+      "unit": "GB",
+      "quantity": 500,
+      "unit_price": "0.24",
+      "amount": "120.00"
+    },
+    {
+      "index": 4,
+      "name": "技术支持服务费",
+      "spec": "7x24小时 / 企业级",
+      "unit": "月",
+      "quantity": 1,
+      "unit_price": "2000.00",
+      "amount": "2000.00"
+    },
+    {
+      "index": 5,
+      "name": "数据备份服务",
+      "spec": "异地容灾 / 100GB",
+      "unit": "月",
+      "quantity": 1,
+      "unit_price": "300.00",
+      "amount": "300.00"
+    }
+  ],
+  "summary": {
+    "subtotal": "6470.00",
+    "tax_rate": "6%",
+    "tax_amount": "388.20",
+    "total_amount": "6858.20",
+    "total_amount_cn": "陆仟捌佰伍拾捌元贰角整"
+  },
+  "payment": {
+    "method": "银行转账",
+    "deadline": "2026-08-25",
+    "bank_name": "中国工商银行中关村支行",
+    "account_name": "云端智能服务有限公司",
+    "account_number": "0200 1234 1920 0067 890"
+  },
+  "signatures": {
+    "supplier_signer": "张管理",
+    "supplier_title": "商务经理",
+    "supplier_date": "2026-08-12",
+    "customer_signer": "",
+    "customer_title": "",
+    "customer_date": ""
+  },
+  "remarks": "1. 本结算单基于合同 HT-2026-0042 生成，如有异议请在3个工作日内提出。\n2. 金额已含增值税专用发票（税率6%）。\n3. 请在到期日前完成付款，逾期将按合同约定收取滞纳金。"
+}
