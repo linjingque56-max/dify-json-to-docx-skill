@@ -21,8 +21,8 @@ info:
     url: https://github.com/linjingque56-max/dify-json-to-docx-skill
 
 servers:
-  - url: http://127.0.0.1:8080
-    description: 本地开发环境（Dify 与 Skill 服务在同一台机器上时使用）
+  - url: http://10.9.23.114:8080
+    description: 局域网部署地址
 
 paths:
   /v1/generate_docx:
